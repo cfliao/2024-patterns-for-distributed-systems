@@ -1,8 +1,0 @@
-* the performance issue of getNewestIndex() in WriteAheadLog.js
-* refactor the clutter code in restoreFromLog()
-* use functional style to replace for loop
-
-
-*修正KVstore 中 若資料重複寫入(主程式結束再開)會導致檔案順序跑掉的問題
-*目前解法打算讓KVstore有取得最新log index 的功能
-*但KVstore 以後construct 時的參數是 directory，非檔名

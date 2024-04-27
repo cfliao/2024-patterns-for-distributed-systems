@@ -13,7 +13,7 @@ class WriteAheadLog {
     }
 
     writeBatch(entries) {// write single entry for the entire batch
-            
+
         const index = this.getNewestDataIndex() + 1;
         const timestamp = new Date().toISOString();
         const logEntry = { index, timestamp, data: [...entries] };
@@ -32,39 +32,21 @@ class WriteAheadLog {
         fs.appendFileSync(this.logPath, logRow, 'utf8');
     }
 
-    getLogContent() {
+    /*getLogContent() {
         if (!fs.existsSync(this.logPath)) {
             fs.writeFileSync(this.logPath, '');
             return '';
         }
         return fs.readFileSync(this.logPath, 'utf8');
     }
-
-    removeLogContent(rowNumber) {
-        try {
-            const filePath = this.logPath;
-            fs.readFile(filePath, 'utf8', (err, data) => {
-                if (err) {
-                    console.error('Error reading file:', err);
-                    return;
-                }
-
-                const lines = data.split('\n');
-                lines.splice(rowNumber, 1); // Remove the specified line
-
-                const updatedContent = lines.join('\n');
-
-                fs.writeFile(filePath, updatedContent, 'utf8', (err) => {
-                    if (err) {
-                        console.error('Error writing file:', err);
-                        return;
-                    }
-                    //console.log('Log content removed successfully.');
-                });
-            });
-        } catch (error) {
-            console.error('Error removing log content:', error);
+        */
+    
+    getLogContent(filePath = this.logPath) {
+        if (!fs.existsSync(filePath)) {
+            fs.writeFileSync(filePath, '');
+            return '';
         }
+        return fs.readFileSync(filePath, 'utf8');
     }
 
     // this approach can be harmful to performance
@@ -87,99 +69,167 @@ class WriteAheadLog {
         return newestIndex;
     }
 
-    /*    The following is Segmented Log implementation    */
-
-    //the variable of the max log line numbers
-    getMaxLogLine_Numbers(){
+    getSegmentedSize(){
         return this.rotateSize;
     }
 
-    //get the log's file index
-    getBaseOffsetFromFileName(filePath) {
-        const FileName = path.basename(filePath);
-        const NameAndSuffix = FileName.split(this.logSuffix);
-        const PrefixAndOffset = NameAndSuffix[0].split('_');
+    removeLogContent(filePath,rowIndex){
 
-        if(PrefixAndOffset[0] === this.logPrefix)
-            return parseInt(PrefixAndOffset[1]);
+        fs.readFile(filePath, 'utf8', (err,data) => {
+            if(err)
+                throw err;
 
+            const lines = data.split('\n');
+            lines.splice(rowIndex, 1);//Remove the specified line
+
+            const updatedContent = lines.join('\n');
+            fs.writeFileSync(filePath, updatedContent,'utf8', (err) => {
+                if(err)
+                    console.log("Can't remove log content.");
+            });
+        });
+
+    }
+    /*    The following is Segmented Log implementation    */
+
+    getLog_NumberOfRow(){
+        const logContent = this.getLogContent();
+
+        const logRows = logContent.split('\n');
+        let rowCount = 0;
+
+        for(const row of logRows){
+            if(row.trim() !== ''){
+                rowCount++;
+            }
+        }
+
+        return rowCount;
+    }
+
+    getFileIndex(filePath){
+        const fileName = path.basename(filePath);
+        const NameAndSuffix = fileName.split(this.logSuffix);
+        const PrefixAndIndex = NameAndSuffix[0].split('_');
+
+        if(PrefixAndIndex[0] === this.logPrefix){
+            return parseInt(PrefixAndIndex[1]);
+        }
+        return -1;
+    }
+    searchLogFile(fileIndex){
+        const dir = path.dirname(this.logPath);
+        const files = fs.readdirSync(dir);
+        const fileName = `wal_${fileIndex}.log`;
+
+        for(const file of files){
+            const filePath = path.join(dir,file);
+            if(file.endsWith(fileName)){
+                return filePath;
+            }
+        }
         return -1;
     }
 
-    //get lastest log file's index
-    getNewestSegmentIndex(){
+    searchLogData(filePath, dataIndex){
+        const logContent = this.getLogContent(filePath);
+        const logRows = logContent.split('\n');
+        for(const row of logRows){
+            if(row.trim() !== ''){
+                const index = parseInt(row.split(';')[0]);
+                if(index === dataIndex){
+                    return row; 
+                }
+            }
+        }
+        return -1;
+    }
+    getNewestFileIndex(){
         const directory = path.dirname(this.logPath);
 
-        let SegmentCount = 0;
+        let newestIndex = 0;
 
-        fs.readdirSync(directory).forEach(file => {
+        fs.readdir(directory).forEach(file =>{
             if(file.startsWith(this.logPrefix) && file.endsWith(this.logSuffix)){
-                let temp = this.getBaseOffsetFromFileName(file);
-                if(temp > SegmentCount)
-                    SegmentCount = temp;
-            } 
+                let index = this.getFileIndex(file);
+                if(index > newestIndex){
+                    newestIndex = index;
+                }
+            }
         });
-        return SegmentCount;
+
+        return newestIndex;
     }
 
-    //create the new log file
-    createNewLogFile(){
-        const index = this.getNewestSegmentIndex()+1;
-        const fileName = `wal_${index}.log`;
+    getNewLogIndex(){
 
-        //const dirPath = path.dirname(this.logPath).LogFile;
+        const logContent = this.getLogContent();
+        const row = logContent.split('\n');
+
+        const rowIndex = this.getSegmentedSize();
+
+        var index = -1;
+
+        if (row[rowIndex-1].trim() !== '') {
+            index = parseInt(row[rowIndex].split(';')[0]);
+        }
+        return index;
+    }
+
+    createNewLog(fileIndex){
+
+        const fileName = `wal_${fileIndex}.log`;
+
         const dirPath = path.dirname(this.logPath);
-
         const filePath = path.join(dirPath, fileName);
 
-        fs.open(filePath, 'w', function(err){
-            if(err) throw err;
-        });
+        fs.writeFileSync(filePath,'');
 
         return filePath;
     }
-    //get the second-to-last log path
+
     getOldFilePath(){
-        
-        const oldLogIndex = this.getNewestSegmentIndex();
+        const oldLogIndex = this.getNewestFileIndex();
         const oldFileName = `wal_${oldLogIndex}.log`;
+
         const dirPath = path.dirname(this.logPath);
-        const oldfilePath = path.join(dirPath, oldFileName);
-        return oldfilePath;
+        const oldFilePath = path.join(dirPath, oldFileName);
+
+        return oldFilePath;
+    }
+
+    getRotateData(){
+        const logContent = this.getLogContent();
+        const logRows = logContent.split('\n');
+        var index = this.getSegmentedSize();
+        let row = logRows[index];
+        return row;
     }
 
     maybeRotate(){
-        if(this.getNewestDataIndex()>=this.getMaxLogLine_Numbers()){
-            //split the log into two parts, [0 to 9 lines] and [the lines after 9th]
-            const logContent = this.getLogContent();
-            const logRows = logContent.split('\n');
+        let newFilePath = this.logPath;
+        if(this.getLog_NumberOfRow() >= this.getSegmentedSize()){
+
+            let row = this.getRotateData();
             
-            const newFilePath = this.createNewLogFile();
-            const oldfilePath = this.getOldFilePath();
+            if(row.trim()!==''){
 
-            var newIndex = 0;   
+                row += '\n'; 
+ 
+                const newFileIndex = parseInt(row.split(';')[0]);
+                 
+                newFilePath = this.createNewLog(newFileIndex)
 
-            for(let i = this.getMaxLogLine_Numbers(); i<=this.getNewestDataIndex(); i++){
-                let row = logRows[i];
-                
-                if(row.trim()!==' '){
+                fs.appendFileSync(newFilePath, row);
 
-                    //replace the old index with new one
-                    let parts = row.split(';');
-                    parts[0] = newIndex;
-                    row = parts.join(';');
-                    row += '\n';
-                    
-                    fs.appendFileSync(newFilePath, row);
-                    newIndex++;
-                    
-                    this.removeLogContent(i, oldfilePath);
-                }
+                this.removeLogContent(this.logPath,this.getSegmentedSize())
             }
-            this.logPath = newFilePath;
         }
+        // this approach can be harmful to performance
+        //this.logPath = this.findLatestLogFile(path.dirname(this.logPath));
+        
+        this.logPath = newFilePath;
     }
-
 }
 
 export default WriteAheadLog;
