@@ -13,7 +13,7 @@ const client = require('node-fetch');
             type:"Batch",
             key1: 'name',
             value1: 'NewYork',
-            key2: 'age',
+            key2: 'weight',
             value2:33
         })
     });

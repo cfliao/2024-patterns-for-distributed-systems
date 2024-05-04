@@ -1,15 +1,32 @@
 import WriteAheadLog from './WriteAheadLog.js';
+import LogCleaner from './LowWaterMark.js';
 import fs from 'node:fs'
 import path from 'path'
+
 class KVStore {
 
-    constructor(logDirPath,rotateSize) {
+    constructor(logDirPath,rotateSize, logMaxDurationMs){
         this.kv = new Map();
         this.logPath = this.getLatestLogFile(logDirPath);
         this.wal = new WriteAheadLog(this.logPath,rotateSize);
+        this.LowWaterMark = new LogCleaner(logDirPath,logMaxDurationMs);
         this.rotateSize = rotateSize;
         this.wal.maybeRotate();
         this.restoreFromLog();
+    }
+
+    getSortedSegments(directory){
+
+        const files = fs.readdirSync(directory);
+
+        const prefixFiles = files.filter(file => file.startsWith('wal_') && file.endsWith('.log'));
+
+        prefixFiles.sort((a, b) => {
+            const indexA = parseInt(a.split('_')[1].split('.')[0]);
+            const indexB = parseInt(b.split('_')[1].split('.')[0]);
+            return indexA - indexB;
+        });
+        return prefixFiles;
     }
 
     getLatestLogFile(dirname) {
@@ -18,7 +35,6 @@ class KVStore {
 
         const prefixFiles = files.filter(file => file.startsWith('wal_') && file.endsWith('.log'));
 
-        //if it's empty in the LogFile
         if (prefixFiles.length === 0){
             const newLogFile = path.join(dirname, `wal_0.log`);
             fs.writeFileSync(newLogFile, ''); // Create an empty log file
@@ -34,6 +50,7 @@ class KVStore {
         return path.join(dirname, prefixFiles[0]);
     }
 
+    //used in getLogData()
     searchLogFile(fileIndex){
         const filePath = this.wal.searchLogFile(fileIndex);
         if(filePath === -1){
@@ -42,6 +59,7 @@ class KVStore {
         else
             return filePath;
     }
+    //used in getLogData()
     searchLogData(filePath, dataIndex){
         const data = this.wal.searchLogData(filePath, dataIndex);
         if(data === -1){
@@ -50,6 +68,7 @@ class KVStore {
         else
             return data;
     }
+
     getLogData(dataIndex){
         let index = Math.floor(dataIndex/this.rotateSize);
         const fileIndex = index*this.rotateSize;
@@ -65,28 +84,59 @@ class KVStore {
         }
         return data;
     }
-    restoreFromLog(){            
-        const logContent = this.wal.getLogContent();
-        const logRows = logContent.split('\n');
-        for (const row of logRows) {
-            if (row.trim() !== '') {
-                const [index, timestamp, data] = row.split(';');
 
-                if (data.startsWith('[')) {
-                    const map = new Map(JSON.parse(data));
-                    for (const [key, value] of map.entries()) {
-                        this.kv.set(key, value);                        
+    restoreFromLog(){
+        const directory = this.getLogDirPath();
+        const sortedSegments = this.getSortedSegments(directory);
+
+        for(const segment of sortedSegments){
+
+            const file = path.join(directory,segment);
+            const logContent = this.wal.getLogContent(file);
+
+            const logRows = logContent.split('\n');
+            for (const row of logRows) {
+                if (row.trim() !== '') {
+                    const [index, timestamp, data] = row.split(';');
+
+                    if (data.startsWith('[')) {
+                        const map = new Map(JSON.parse(data));
+                        for (const [key, value] of map.entries()) {
+                            this.kv.set(key, value);                        
+                        }
+                    } else {
+                        const { key, value } = JSON.parse(data);
+                        this.kv.set(key, value);
                     }
-                } else {
-                    const { key, value } = JSON.parse(data);
-                    this.kv.set(key, value);
                 }
             }
         }
     }
+    getLogDirPath(){
+        return path.dirname(this.logPath);
+    }
 
+    cleanLog(resetIndex){
+        const openSegment = this.logPath;
+        this.storeCurrentMap();
+        this.LowWaterMark.cleanLogs(resetIndex, openSegment);
+        //this.restoreFromSnapshot();
+
+    }
+    storeCurrentMap(){
+        for(const [key, value] of this.kv){
+            this.put(key, value);
+        }
+    }
+
+    restoreFromSnapshot(){
+        this.logPath = this.getLatestLogFile(this.getLogDirPath());
+
+        console.log("restoreFromSnapshot", this.logPath);
+        this.wal.logPath = this.logPath;
+    }
     getMap() {
-        return this.kv;
+        return this.kv
     }
 
     get(key) {
@@ -107,13 +157,25 @@ class KVStore {
         }
         this.wal.maybeRotate();
     }
-    getLogDirPath(){
-        return path.dirname(this.logPath);
+    putBatch_CrashTest(map){
+        this.wal.writeBatch(map.entries());
+        for(const [key, value] of map.entries()){
+            this.kv.set(key, value);
+            console.log("current data:");
+            this.kv.forEach((value,key)=>{
+                console.log(key,value);
+            });
+            process.exit(1);
+        }
+        this.wal.maybeRotate();
     }
+
+    /*
     TakeSnapShot(){
-        snapShotTakenAtLogIndex = this.getLatestLogFile(this.getLogDirPath());
+        const snapShotTakenAtLogIndex = this.getLatestLogFile(this.getLogDirPath());
         return snapShotTakenAtLogIndex; 
     }
+    */
 }
 
 export default KVStore;

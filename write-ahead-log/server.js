@@ -8,6 +8,7 @@ let kv = new KVStore('./LogFile', 5);
 
 server.get('/log/:Index', function(req, res){
     const dataIndex = parseInt(req.params.Index);
+    console.log(dataIndex);
     const data = kv.getLogData(dataIndex);
     if(data !== -1){
         return data;
@@ -16,6 +17,23 @@ server.get('/log/:Index', function(req, res){
         return {"error":"not found"};
     }
 });
+
+server.get('/log/all', function(req, res){
+    const data = kv.getMap();
+    console.log(data);
+    return data;
+});
+
+server.post('/test', function(req, res){
+    console.log("boston reduce 40, and pune increase 40");
+    const data = req.body;
+    let batch = new Map();
+    batch.set(data.key1, data.value1);
+    batch.set(data.key2, data.value2);
+    kv.putBatch_CrashTest(batch);
+});
+
+
 
 server.post('/log', function(req, res){
     const data = req.body;
@@ -33,6 +51,7 @@ server.post('/log', function(req, res){
     else{
         kv.put(data.key, data.value);
     }
+
     return data;
 });
 

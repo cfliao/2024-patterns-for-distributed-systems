@@ -1,3 +1,4 @@
+import {log} from 'node:console';
 import fs from 'node:fs';
 import path from 'path';
 
@@ -32,15 +33,6 @@ class WriteAheadLog {
         fs.appendFileSync(this.logPath, logRow, 'utf8');
     }
 
-    /*getLogContent() {
-        if (!fs.existsSync(this.logPath)) {
-            fs.writeFileSync(this.logPath, '');
-            return '';
-        }
-        return fs.readFileSync(this.logPath, 'utf8');
-    }
-        */
-    
     getLogContent(filePath = this.logPath) {
         if (!fs.existsSync(filePath)) {
             fs.writeFileSync(filePath, '');
@@ -73,50 +65,18 @@ class WriteAheadLog {
         return this.rotateSize;
     }
 
-    removeLogContent(filePath,rowIndex){
+    removeLogContent(filePath){
+        
+        let logContent = this.getLogContent(filePath);
+        let logRows = logContent.split('\n');
 
-        fs.readFile(filePath, 'utf8', (err,data) => {
-            if(err)
-                throw err;
-
-            const lines = data.split('\n');
-            lines.splice(rowIndex, 1);//Remove the specified line
-
-            const updatedContent = lines.join('\n');
-            fs.writeFileSync(filePath, updatedContent,'utf8', (err) => {
-                if(err)
-                    console.log("Can't remove log content.");
-            });
-        });
-
+        logRows.pop();                  // remove the '' charactor 
+        const aimingRow = logRows.pop();    // remove the aim row
+        
+        const updatedContent = logRows.join('\n');
+        fs.writeFileSync(filePath, updatedContent, 'utf8');
     }
-    /*    The following is Segmented Log implementation    */
-
-    getLog_NumberOfRow(){
-        const logContent = this.getLogContent();
-
-        const logRows = logContent.split('\n');
-        let rowCount = 0;
-
-        for(const row of logRows){
-            if(row.trim() !== ''){
-                rowCount++;
-            }
-        }
-
-        return rowCount;
-    }
-
-    getFileIndex(filePath){
-        const fileName = path.basename(filePath);
-        const NameAndSuffix = fileName.split(this.logSuffix);
-        const PrefixAndIndex = NameAndSuffix[0].split('_');
-
-        if(PrefixAndIndex[0] === this.logPrefix){
-            return parseInt(PrefixAndIndex[1]);
-        }
-        return -1;
-    }
+    
     searchLogFile(fileIndex){
         const dir = path.dirname(this.logPath);
         const files = fs.readdirSync(dir);
@@ -144,12 +104,37 @@ class WriteAheadLog {
         }
         return -1;
     }
-    getNewestFileIndex(){
+    /*    The following is Segmented Log implementation    */
+
+    getLogRowCount(){
+        const logContent = this.getLogContent();
+        const logRows = logContent.split('\n');
+        let rowCount = 0;
+
+        for(const row of logRows){
+            if(row.trim() !== ''){
+                rowCount++;
+            }
+        }
+        return rowCount;
+    }
+
+    /*getFileIndex(filePath){
+        const fileName = path.basename(filePath);
+        const NameAndSuffix = fileName.split(this.logSuffix);
+        const PrefixAndIndex = NameAndSuffix[0].split('_');
+
+        if(PrefixAndIndex[0] === this.logPrefix){
+            return parseInt(PrefixAndIndex[1]);
+        }
+        return -1;
+    }
+    /*getNewestFileIndex(){
         const directory = path.dirname(this.logPath);
 
         let newestIndex = 0;
 
-        fs.readdir(directory).forEach(file =>{
+        fs.readdirSync(directory).forEach(file =>{
             if(file.startsWith(this.logPrefix) && file.endsWith(this.logSuffix)){
                 let index = this.getFileIndex(file);
                 if(index > newestIndex){
@@ -161,19 +146,22 @@ class WriteAheadLog {
         return newestIndex;
     }
 
-    getNewLogIndex(){
+    getOldFilePath(){
+        const oldLogIndex = this.getNewestFileIndex();
+        const oldFileName = `wal_${oldLogIndex}.log`;
 
+        const dirPath = path.dirname(this.logPath);
+        const oldFilePath = path.join(dirPath, oldFileName);
+
+        return oldFilePath;
+    }*/
+
+    getRotateData(){
         const logContent = this.getLogContent();
-        const row = logContent.split('\n');
-
-        const rowIndex = this.getSegmentedSize();
-
-        var index = -1;
-
-        if (row[rowIndex-1].trim() !== '') {
-            index = parseInt(row[rowIndex].split(';')[0]);
-        }
-        return index;
+        const logRows = logContent.split('\n');
+        var index = this.getSegmentedSize();
+        let row = logRows[index];
+        return row;
     }
 
     createNewLog(fileIndex){
@@ -188,28 +176,9 @@ class WriteAheadLog {
         return filePath;
     }
 
-    getOldFilePath(){
-        const oldLogIndex = this.getNewestFileIndex();
-        const oldFileName = `wal_${oldLogIndex}.log`;
-
-        const dirPath = path.dirname(this.logPath);
-        const oldFilePath = path.join(dirPath, oldFileName);
-
-        return oldFilePath;
-    }
-
-    getRotateData(){
-        const logContent = this.getLogContent();
-        const logRows = logContent.split('\n');
-        var index = this.getSegmentedSize();
-        let row = logRows[index];
-        return row;
-    }
-
     maybeRotate(){
         let newFilePath = this.logPath;
-        if(this.getLog_NumberOfRow() >= this.getSegmentedSize()){
-
+        if(this.getLogRowCount() > this.getSegmentedSize()){
             let row = this.getRotateData();
             
             if(row.trim()!==''){
@@ -219,14 +188,12 @@ class WriteAheadLog {
                 const newFileIndex = parseInt(row.split(';')[0]);
                  
                 newFilePath = this.createNewLog(newFileIndex)
-
+                
                 fs.appendFileSync(newFilePath, row);
-
-                this.removeLogContent(this.logPath,this.getSegmentedSize())
+                
+                this.removeLogContent(this.logPath);
             }
         }
-        // this approach can be harmful to performance
-        //this.logPath = this.findLatestLogFile(path.dirname(this.logPath));
         
         this.logPath = newFilePath;
     }
