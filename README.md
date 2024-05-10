@@ -3,6 +3,30 @@
 This repository contains code used to explore and understand the patterns presented in the book 'Patterns of Distributed Systems' (Unmesh Joshi, 2024).
 
 ## Patterns
+<!-- 
+### KVStore
+KV Store is the driven function of ***Write Ahead Log(WAL)***, ***Segmented Log*** and ***Low-Water Marked***.
+
+
+#### member variable
+* KV.map : store the current key-value
+
+#### constructor
+
+ Putting ````maybeRotate()```` in the constructor can check the open segment is in right format. If the server crashed before rotate, this can come in handy.
+
+````
+constructor(){
+    this.kv = new Map();
+    this.wal = new WriteAheadLog();
+    this.lowWaterMark = new lowWaterMark();
+    this.wal.maybeRotate();             //check open segment is in well format
+    this.restoreFromLog();              //restore the current key-value to KVmap
+}
+````
+#### key function to KV Store
+-->
+
 
 ### Write-Ahead Log (WAL)
 

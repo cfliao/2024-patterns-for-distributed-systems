@@ -1,16 +1,11 @@
-import {log} from 'node:console';
 import fs from 'node:fs';
 import path from 'path';
 
 
 class WriteAheadLog {
-    logPrefix;
-    logSuffix;
     constructor(logPath,rotateSize){
         this.logPath = logPath;
         this.rotateSize = rotateSize;
-        this.logSuffix = '.log';
-        this.logPrefix = 'wal';
     }
 
     writeBatch(entries) {// write single entry for the entire batch
@@ -104,6 +99,8 @@ class WriteAheadLog {
         }
         return -1;
     }
+
+
     /*    The following is Segmented Log implementation    */
 
     getLogRowCount(){
@@ -118,43 +115,6 @@ class WriteAheadLog {
         }
         return rowCount;
     }
-
-    /*getFileIndex(filePath){
-        const fileName = path.basename(filePath);
-        const NameAndSuffix = fileName.split(this.logSuffix);
-        const PrefixAndIndex = NameAndSuffix[0].split('_');
-
-        if(PrefixAndIndex[0] === this.logPrefix){
-            return parseInt(PrefixAndIndex[1]);
-        }
-        return -1;
-    }
-    /*getNewestFileIndex(){
-        const directory = path.dirname(this.logPath);
-
-        let newestIndex = 0;
-
-        fs.readdirSync(directory).forEach(file =>{
-            if(file.startsWith(this.logPrefix) && file.endsWith(this.logSuffix)){
-                let index = this.getFileIndex(file);
-                if(index > newestIndex){
-                    newestIndex = index;
-                }
-            }
-        });
-
-        return newestIndex;
-    }
-
-    getOldFilePath(){
-        const oldLogIndex = this.getNewestFileIndex();
-        const oldFileName = `wal_${oldLogIndex}.log`;
-
-        const dirPath = path.dirname(this.logPath);
-        const oldFilePath = path.join(dirPath, oldFileName);
-
-        return oldFilePath;
-    }*/
 
     getRotateData(){
         const logContent = this.getLogContent();
