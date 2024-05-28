@@ -23,7 +23,7 @@ const client = require('node-fetch');
 
 const data_key = ['age','gender','location','nation'];
 
-for(let i=0; i<20; i++){
+for(let i=0; i<5000; i++){
     const key = data_key[i%4];
     const value = i;
     
@@ -42,6 +42,21 @@ for(let i=0; i<20; i++){
         const data = await resp.json();
         console.log(data);
     })();
-
-
 }
+(async () => {
+    const resp = await client('http://localhost:3000/log',{
+        method: 'POST',
+        headers:{
+            'Content-Type':'application/json'
+        },
+        body:JSON.stringify({
+            type:"Batch",
+            key1: 'test',
+            value1: '10000',
+            key2: 'status',
+            value2:1
+        })
+    });
+    const data = await resp.json();
+    console.log(data);
+})();

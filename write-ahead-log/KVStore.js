@@ -6,12 +6,13 @@ import path from 'path'
 class KVStore {
 
     constructor(logDirPath,rotateSize, logMaxDurationMs){
+        this.flag = 1;
         this.kv = new Map();
         this.logPath = this.getLatestLogFile(logDirPath);
         this.wal = new WriteAheadLog(this.logPath,rotateSize);
         this.LowWaterMark = new LogCleaner(logDirPath,logMaxDurationMs);
         this.rotateSize = rotateSize;
-        this.wal.maybeRotate();
+        //this.wal.maybeRotate();
         this.restoreFromLog();
     }
 
@@ -146,7 +147,9 @@ class KVStore {
     put(key, value) {
         this.wal.writeEntry(key, value);
         this.kv.set(key, value);
-        this.wal.maybeRotate();
+        if(this.flag === 1){
+            this.wal.maybeRotate();
+        }
     }
 
     putBatch(map) {
@@ -155,7 +158,9 @@ class KVStore {
         for (const [key, value] of map.entries()) {
             this.kv.set(key, value);
         }
-        this.wal.maybeRotate();
+        if(this.flag === 1){
+            this.wal.maybeRotate();
+        }
     }
     putBatch_CrashTest(map){
         this.wal.writeBatch(map.entries());
@@ -167,7 +172,7 @@ class KVStore {
             });
             process.exit(1);
         }
-        this.wal.maybeRotate();
+        //this.wal.maybeRotate();
     }
 
     /*

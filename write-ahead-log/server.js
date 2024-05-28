@@ -3,7 +3,7 @@ import {createRequire} from 'module';
 const require = createRequire(import.meta.url);
 const server = require('fastify')();
 
-let kv = new KVStore('./LogFile', 5);
+let kv = new KVStore('./LogFile', 1000);
 
 
 server.get('/log/:Index', function(req, res){
