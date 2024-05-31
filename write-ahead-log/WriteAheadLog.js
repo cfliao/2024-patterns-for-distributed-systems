@@ -25,7 +25,7 @@ class WriteAheadLog {
         const logEntry = { index, timestamp, data: { key, value } };
         const logRow = `${index};${timestamp};${JSON.stringify(logEntry.data)}\n`;
 
-        fs.appendFileSync(this.logPath, logRow, 'utf8');
+        fs.appendFileSync(tis.logPath, logRow, 'utf8');
     }
 
     getLogContent(filePath = this.logPath) {

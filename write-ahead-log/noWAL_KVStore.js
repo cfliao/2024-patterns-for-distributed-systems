@@ -1,4 +1,3 @@
-import WriteAheadLog from './WriteAheadLog.js';
 import LogCleaner from './LowWaterMark.js';
 import fs from 'node:fs'
 import path from 'path'
@@ -7,15 +6,11 @@ import { parse, stringify } from 'csv/sync';
 class KVStore {
 
     constructor(logDirPath,rotateSize, logMaxDurationMs, DBPath){
-        this.flag = 1;
         this.kv = new Map();
         this.logPath = this.getLatestLogFile(logDirPath);
         this.DBPath = DBPath;
-        this.wal = new WriteAheadLog(this.logPath,rotateSize);
         this.LowWaterMark = new LogCleaner(logDirPath,logMaxDurationMs);
         this.rotateSize = rotateSize;
-        //this.wal.maybeRotate();  暫放在restoreFromLog()
-        this.restoreFromLog();
     }
 
     getSortedSegments(directory){
@@ -53,25 +48,6 @@ class KVStore {
         return path.join(dirname, prefixFiles[0]);
     }
 
-    //used in getLogData()
-    searchLogFile(fileIndex){
-        const filePath = this.wal.searchLogFile(fileIndex);
-        if(filePath === -1){
-            return -1; 
-        }
-        else
-            return filePath;
-    }
-    //used in getLogData()
-    searchLogData(filePath, dataIndex){
-        const data = this.wal.searchLogData(filePath, dataIndex);
-        if(data === -1){
-            return -1;
-        }
-        else
-            return data;
-    }
-
     getLogData(dataIndex){
         let index = Math.floor(dataIndex/this.rotateSize);
         const fileIndex = index*this.rotateSize;
@@ -88,38 +64,6 @@ class KVStore {
         return data;
     }
 
-    restoreFromLog(){
-        
-        if(this.flag === 1){
-            this.wal.maybeRotate;
-        }
-        const directory = this.getLogDirPath();
-        const sortedSegments = this.getSortedSegments(directory);
-
-        for(const segment of sortedSegments){
-
-            const file = path.join(directory,segment);
-            const logContent = this.wal.getLogContent(file);
-
-            const logRows = logContent.split('\n');
-            for (const row of logRows) {
-                if (row.trim() !== '') {
-                    const [index, timestamp, data] = row.split(';');
-
-                    if (data.startsWith('[')) {
-                        const map = new Map(JSON.parse(data));
-                        this.putBatch(map);
-                        /*for (const [key, value] of map.entries()) {
-                            this.kv.set(key, value);                        
-                        }*/
-                    } else {
-                        const { key, value } = JSON.parse(data);
-                        this.put(key, value);
-                    }
-                }
-            }
-        }
-    }
     getLogDirPath(){
         return path.dirname(this.logPath);
     }
@@ -137,12 +81,6 @@ class KVStore {
         }
     }
 
-    /*restoreFromSnapshot(){
-        this.logPath = this.getLatestLogFile(this.getLogDirPath());
-
-        console.log("restoreFromSnapshot", this.logPath);
-        this.wal.logPath = this.logPath;
-    }*/
     getMap() {
         return this.kv
     }
@@ -202,47 +140,30 @@ class KVStore {
     }
 
     put(key, value) {
-        this.wal.writeEntry(key, value);
         this.kv.set(key, value);
         this.updateDB(key, value);
-        if(this.flag === 1){
-            this.wal.maybeRotate();
-        }
     }
 
     putBatch(map) {
-        this.wal.writeBatch(map.entries());
 
         for (const [key, value] of map.entries()) {
             this.kv.set(key, value);
             this.updateDB(key, value);
         }
-        if(this.flag === 1){
-            this.wal.maybeRotate();
-        }
     }
     put_CrashTest(key, value) {
-        this.wal.writeEntry(key, value);
         this.kv.set(key, value);
         process.kill(process.pid, 'SIGTERM');
         
         this.updateDB(key, value);
-        if(this.flag === 1){
-            this.wal.maybeRotate();
-        }
     }
     putBatch_CrashTest(map){
-        this.wal.writeBatch(map.entries());
         for(const [key, value] of map.entries()){
             this.kv.set(key, value);
             this.updateDB(key, value);
             process.kill(process.pid, 'SIGTERM');
-            //process.exit(1);
         }
 
-        if(this.flag === 1){
-            this.wal.maybeRotate();
-        }
     }
 
     /*

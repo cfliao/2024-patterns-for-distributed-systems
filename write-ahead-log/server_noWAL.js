@@ -1,28 +1,11 @@
-import KVStore from './KVStore.js';
+import noWAL_KVStore from './noWAL_KVStore.js';
 import {createRequire} from 'module';
 const require = createRequire(import.meta.url);
 const server = require('fastify')();
 
-let kv = new KVStore('./LogFile', 1000,1000,'./database.csv');
+let kv = new noWAL_KVStore('./LogFile', 1000,1000,'./database.csv');
 
 
-server.get('/log/:Index', function(req, res){
-    const dataIndex = parseInt(req.params.Index);
-    console.log(dataIndex);
-    const data = kv.getLogData(dataIndex);
-    if(data !== -1){
-        return data;
-    }
-    else{
-        return {"error":"not found"};
-    }
-});
-
-server.get('/log/all', function(req, res){
-    const data = kv.getMap();
-    console.log(data);
-    return data;
-});
 
 server.post('/test', function(req, res){
     console.log("boston reduce 40, and pune increase 40");

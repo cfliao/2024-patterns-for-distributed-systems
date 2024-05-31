@@ -11,6 +11,9 @@
   "author": "",
   "license": "ISC",
   "dependencies": {
+    "csv": "^6.3.9",
+    "csv-parser": "^3.0.0",
+    "csv-writer": "^1.6.0",
     "fastify": "^3.11.0",
     "node-fetch": "^2.6.1"
   }

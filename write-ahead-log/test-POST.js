@@ -21,11 +21,10 @@ const client = require('node-fetch');
     console.log(data);
 })();
 
-const data_key = ['age','gender','location','nation'];
 
-for(let i=0; i<5000; i++){
-    const key = data_key[i%4];
-    const value = i;
+for(let i=0; i<10000; i++){
+    const key = i;
+    const value = 0;
     
     (async () => {
         const resp = await client('http://localhost:3000/log',{
@@ -58,5 +57,4 @@ for(let i=0; i<5000; i++){
         })
     });
     const data = await resp.json();
-    console.log(data);
 })();
